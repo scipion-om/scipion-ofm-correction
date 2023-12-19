@@ -28,7 +28,7 @@ setup(
     version='0.1',  # Required
     description='Scipion plugin for correcting optical fluorecence images channels.',  # Required
     long_description=long_description,  # Optional
-    url='https://github.com/i2pc/scipion-ofm_correction',  # Optional
+    url='https://github.com/scipion-om/scipion-ofm_correction',  # Optional
     author='you',  # Optional
     author_email='pconesa@cnb.csic.es',  # Optional
     keywords='scipion optical microscopy fluorecence correction imageprocessing scipion-3.0',  # Optional
