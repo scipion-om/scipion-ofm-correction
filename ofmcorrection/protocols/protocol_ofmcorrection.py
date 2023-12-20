@@ -35,8 +35,7 @@ import os
 from glob import glob
 from time import sleep
 
-from ofmcorrection import Plugin
-from pyworkflow.protocol import ProtStreamingBase, params, STEPS_PARALLEL
+from pyworkflow.protocol import ProtStreamingBase, params
 from pyworkflow.utils import Message, removeBaseExt, redStr
 
 HELP_DURATION_FORMAT = "Duration format example: 1d 20h 30m 30s --> 1 day 20 hours 30 minutes and 30 seconds"
@@ -103,9 +102,9 @@ class ofmcorrCorrector(ProtStreamingBase):
 
                     if beadsFile:
                         self._insertFunctionStep(self.correctStep, file, beadsFile, prerequisites=[])
-                        self.info("New file %s detected. Adding it for correction."  % file)
+                        self.info("New file %s detected. Adding it for correction." % file)
                     else:
-                        self.info("No beads file found for %s. Skipping it." % file)
+                        self.info(redStr("No beads file found for %s. Skipping it." % file))
 
             now = datetime.datetime.now()
 
@@ -151,7 +150,7 @@ class ofmcorrCorrector(ProtStreamingBase):
         folder = os.path.dirname(file)
 
         for sameFolderFile in os.listdir(folder):
-            self.info("Is %s a beads file?." % sameFolderFile)
+            self.debug("Is %s a beads file?." % sameFolderFile)
             if self.isBeadsFile(sameFolderFile):
 
                 beadsFile = os.path.join(folder, sameFolderFile)
@@ -182,11 +181,11 @@ class ofmcorrCorrector(ProtStreamingBase):
             self._handledFiles.remove(file)
             return
         args = '--ij2 --headless --default-gc'
-        args += ' --run "%s"' % os.path.join(Plugin.getPluginDir(),"scripts", "bUnwarpJ_code.groovy")
+        args += ' --run "%s"' % os.path.join(self.getPlugin.getPluginDir(),"scripts", "bUnwarpJ_code.groovy")
         args += ' "inputFile=\'%s\',beadsFile=\'%s\',outputDir=\'%s\',fixedCh=%s,headless=true"' % \
                 (file, beadsFile, os.path.dirname(file) , self.refChannel.get())
 
-        self.runJob(Plugin.getFijiLauncher(), args)
+        self.runJob(self.getPlugin.getFijiLauncher(), args)
 
 
     # --------------------------Helper functions ----------------------------------
