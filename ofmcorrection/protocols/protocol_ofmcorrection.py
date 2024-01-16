@@ -32,11 +32,13 @@ This module will provide the traditional Hello world example
 """
 import datetime
 import os
-from glob import glob
 from time import sleep
 
 from pyworkflow.protocol import ProtStreamingBase, params
-from pyworkflow.utils import Message, removeBaseExt, redStr
+from pyworkflow.utils import Message, removeBaseExt, redStr, greenStr, isFileFinished, strToDuration
+from pwem.objects import SetOfImages, Image
+
+CORRECTED_IMAGES = "correctedImages"
 
 HELP_DURATION_FORMAT = "Duration format example: 1d 20h 30m 30s --> 1 day 20 hours 30 minutes and 30 seconds"
 class ofmcorrCorrector(ProtStreamingBase):
@@ -66,6 +68,12 @@ class ofmcorrCorrector(ProtStreamingBase):
                       allowsNull=False,
                       help='Path to the OFM sample images')
 
+        form.addParam('fileAge', params.StringParam,
+                      label='File finished after',
+                      allowsNull=False,
+                      default="7h",
+                      help="File will be considered finished if it has not been modified for this time. %s" % HELP_DURATION_FORMAT)
+
         form.addParam('refChannel', params.IntParam,
                       default=0,
                       label='Fixed/Target channel',
@@ -89,33 +97,58 @@ class ofmcorrCorrector(ProtStreamingBase):
         while keepchecking:
 
             # Look up in the input images folder
-            # Glob HERE.
+            for folder in self.findProcessingFolders(self.images.get()):
 
-            for file in glob(self.images.get()):
+                for file in os.listdir(folder):
 
-                # Exclude Beads file...
-                self.info("%s file listed." % file)
+                    file = os.path.join(folder,file)
+                    self.debug("%s file is in process folder." % file)
 
+                    if not self.fileDone(file):
 
-                if not self.fileDone(file):
-                    beadsFile = self.getBeadsFile(file)
+                        # If file is finished
+                        if isFileFinished(file, strToDuration(self.fileAge.get())):
+                            beadsFile = self.getBeadsFile(file)
 
-                    if beadsFile:
-                        self._insertFunctionStep(self.correctStep, file, beadsFile, prerequisites=[])
-                        self.info("New file %s detected. Adding it for correction." % file)
-                    else:
-                        self.info(redStr("No beads file found for %s. Skipping it." % file))
+                            if beadsFile:
 
+                                # Get the last modification time
+
+                                self._insertFunctionStep(self.correctStep, file, beadsFile, prerequisites=[])
+                                self.info(greenStr("New file %s detected. Adding it for correction." % file))
+                            else:
+                                self.info(redStr("No beads file found for %s. Skipping it." % file))
+                        else:
+                            self.debug("File %s is not finished. It has changed in the last %s." %(file, self.fileAge.get()))
             now = datetime.datetime.now()
 
-            secsToWait = self.durationStr2Seconds(self.waitingTime.get())
+            secsToWait = strToDuration(self.waitingTime.get())
 
             nextCheck = now + datetime.timedelta(seconds=secsToWait)
 
-            self.info("Sleeping now. Next check will be at %s" % nextCheck )
+            self.info("Sleeping now. Next check will be at %s" % nextCheck)
             sleep(secsToWait)
 
             keepchecking = True
+
+    def findProcessingFolders(self, folder):
+        """ Iterates over all the folders and subfolders looking for Beads file.
+        Stops the search in depth when a folder with beads file is found. Search is recursive."""
+
+        subfolders = []
+
+        for file in os.listdir(folder):
+            file = os.path.join(folder,file)
+            if os.path.isdir(file):
+              subfolders.append(file)
+            # If file is a Beads file
+            elif self.isBeadsFile(file):
+                yield folder
+                return
+
+        # If codes reaches this part it is not a Processing folder
+        for folder in subfolders:
+            yield from self.findProcessingFolders(folder)
 
     def fileDone(self, file):
         """ Checks if the file has been processed already"""
@@ -180,24 +213,42 @@ class ofmcorrCorrector(ProtStreamingBase):
                                 "the folder contains the beads file." % (file, self.beadsFile.get())))
             self._handledFiles.remove(file)
             return
-        args = '--ij2 --headless --default-gc'
-        args += ' --run "%s"' % os.path.join(self.getPlugin.getPluginDir(),"scripts", "bUnwarpJ_code.groovy")
-        args += ' "inputFile=\'%s\',beadsFile=\'%s\',outputDir=\'%s\',fixedCh=%s,headless=true"' % \
-                (file, beadsFile, os.path.dirname(file) , self.refChannel.get())
 
-        self.runJob(self.getPlugin.getFijiLauncher(), args)
+        outputFolder = os.path.dirname(file)
+        args = '--ij2 --headless --default-gc'
+        args += ' --run "%s"' % os.path.join(self.getPlugin().getPluginDir(),"scripts", "bUnwarpJ_code.groovy")
+        args += ' "inputFile=\'%s\',beadsFile=\'%s\',outputDir=\'%s\',fixedCh=%s,headless=true"' % \
+                (file, beadsFile, outputFolder , self.refChannel.get())
+
+        self.runJob(self.getPlugin().getFijiLauncher(), args)
+
+
+        # Register the output
+        output = self.getOutputSet()
+
+        for outputFile in os.listdir(outputFolder):
+            newCorrectedFile = Image(file=outputFile)
+            output.append(newCorrectedFile)
+
+        output.write()
+        self._store()
+
+    def getOutputSet(self):
+
+        if not hasattr(self, CORRECTED_IMAGES):
+
+            output = SetOfImages.create(self.getPath())
+            self._defineOutputs(**{CORRECTED_IMAGES:output})
+        else:
+            output = getattr(self, CORRECTED_IMAGES)
+            output.enableAppend()
+
+        return output
+
+
 
 
     # --------------------------Helper functions ----------------------------------
-    def durationStr2Seconds(self, durationStr):
-        """ parses a duration string like 1d 2h 20m into seconds and returns it"""
-
-        toEval = durationStr.replace("d", "*3600*24")\
-            .replace("h", "*3600")\
-            .replace("m", "*60") \
-            .replace("s", "") \
-            .replace(" ", "+")
-        return eval(toEval)
 
 
     # --------------------------- INFO functions -----------------------------------
