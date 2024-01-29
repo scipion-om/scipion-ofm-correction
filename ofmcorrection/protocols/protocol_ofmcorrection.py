@@ -34,9 +34,10 @@ import datetime
 import os
 from time import sleep
 
+import pyworkflow.object
 from pyworkflow.protocol import ProtStreamingBase, params
 from pyworkflow.utils import Message, removeBaseExt, redStr, greenStr, isFileFinished, strToDuration
-from pwem.objects import SetOfImages, Image
+from pwem.objects import SetOfImages, Image, ImageDim
 
 CORRECTED_IMAGES = "correctedImages"
 
@@ -126,7 +127,7 @@ class ofmcorrCorrector(ProtStreamingBase):
 
             nextCheck = now + datetime.timedelta(seconds=secsToWait)
 
-            self.info("Sleeping now. Next check will be at %s" % nextCheck)
+            self.info("Sleeping now. Next check will be at %s" % nextCheck.strftime("%A %H:%M"))
             sleep(secsToWait)
 
             keepchecking = True
@@ -223,12 +224,27 @@ class ofmcorrCorrector(ProtStreamingBase):
         self.runJob(self.getPlugin().getFijiLauncher(), args)
 
 
-        # Register the output
+        # Register the output. Output is in a folder names like the base name fo the file
+        outputFolderName = removeBaseExt(file)
+        outputFolder = os.path.join(outputFolder, outputFolderName)
         output = self.getOutputSet()
 
+        # I assume it is a 2 level folder structure: output folder>series folder>tif files.
         for outputFile in os.listdir(outputFolder):
-            newCorrectedFile = Image(file=outputFile)
-            output.append(newCorrectedFile)
+            seriesFolder= os.path.join(outputFolder, outputFile)
+            if os.path.isdir(seriesFolder):
+                newCorrectedImage = None
+                for index, tifFile in enumerate(os.listdir(seriesFolder)):
+                    tifFile= os.path.join(seriesFolder, tifFile)
+                    if index==0:
+                        newCorrectedImage = Image(location=tifFile)
+                    elif index in [1,2]:
+                        setattr(newCorrectedImage,"image"+str(index), pyworkflow.object.String(tifFile))
+                    else:
+                        self.info("Unexpected extra image found: %s" % tifFile)
+                output.append(newCorrectedImage)
+            else:
+                self.info("%s is a file: This was not expected." % seriesFolder)
 
         output.write()
         self._store()
@@ -238,6 +254,8 @@ class ofmcorrCorrector(ProtStreamingBase):
         if not hasattr(self, CORRECTED_IMAGES):
 
             output = SetOfImages.create(self.getPath())
+            output.setSamplingRate(1)
+
             self._defineOutputs(**{CORRECTED_IMAGES:output})
         else:
             output = getattr(self, CORRECTED_IMAGES)

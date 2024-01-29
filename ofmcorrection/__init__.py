@@ -25,11 +25,13 @@
 # **************************************************************************
 
 import pwem
+from readlif.reader import LifFile
+from pwem.emlib.image.image_readers import ImageReader, ImageReadersRegistry
 
 _logo = "icon.png"
 _references = ['you2019']
 
-FIJI_LAUNCHER_VAR = 'FIJI_LAUNCHER'
+FIJI_LAUNCHER_VAR = 'IMAGEJ_BINARY_PATH'
 
 class Plugin(pwem.Plugin):
 
@@ -37,8 +39,26 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def _defineVariables(cls):
-        cls._defineVar(FIJI_LAUNCHER_VAR, '/home/pablo/software/Fiji-noJre.app/ImageJ-linux64')
-
+        cls._defineVar(FIJI_LAUNCHER_VAR, pwem.Config.IMAGEJ_BINARY_PATH)
     @classmethod
     def getFijiLauncher(cls):
         return cls.getVar(FIJI_LAUNCHER_VAR)
+
+class LifImageReader(ImageReader):
+    """ leica files image reader"""
+    @staticmethod
+    def getCompatibleExtensions() -> list:
+        return ['lif']
+
+    @staticmethod
+    def getDimensions(filePath):
+
+        lif = LifFile(filePath)
+        frames = len(lif.image_list)  # number of pages in the file
+        page = lif.get_image(0)  # get shape and dtype of the image in the first page
+        x = page.dims.x
+        y = page.dims.y
+
+        return x, y, frames, 1
+
+ImageReadersRegistry.addReader(LifImageReader)
