@@ -221,8 +221,11 @@ class ofmcorrCorrector(ProtStreamingBase):
         args += ' "inputFile=\'%s\',beadsFile=\'%s\',outputDir=\'%s\',fixedCh=%s,headless=true"' % \
                 (file, beadsFile, outputFolder , self.refChannel.get())
 
-        self.runJob(self.getPlugin().getFijiLauncher(), args)
-
+        try:
+            self.runJob(self.getPlugin().getFijiLauncher(), args)
+        except Exception as e:
+            self.error("Couldn't correct the %s: %s" % (file, str(e)))
+            return
 
         # Register the output. Output is in a folder names like the base name fo the file
         outputFolderName = removeBaseExt(file)
