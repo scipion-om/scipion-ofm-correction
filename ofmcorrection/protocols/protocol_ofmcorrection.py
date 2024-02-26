@@ -105,6 +105,9 @@ class ofmcorrCorrector(ProtStreamingBase):
                     file = os.path.join(folder,file)
                     self.debug("%s file is in process folder." % file)
 
+                    if not file.endswith(".lif"):
+                        continue
+
                     if not self.fileDone(file):
 
                         # If file is finished
