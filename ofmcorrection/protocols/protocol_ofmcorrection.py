@@ -239,15 +239,18 @@ class ofmcorrCorrector(ProtStreamingBase):
         for outputFile in os.listdir(outputFolder):
             seriesFolder= os.path.join(outputFolder, outputFile)
             if os.path.isdir(seriesFolder):
-                newCorrectedImage = None
+
+                correctedImages = [None, None, None]
                 for index, tifFile in enumerate(os.listdir(seriesFolder)):
-                    tifFile= os.path.join(seriesFolder, tifFile)
-                    if index==0:
-                        newCorrectedImage = Image(location=tifFile)
-                    elif index in [1,2]:
-                        setattr(newCorrectedImage,"image"+str(index), pyworkflow.object.String(tifFile))
+                    tifFile = os.path.join(seriesFolder, tifFile)
+                    if index < 3:
+                        correctedImages[index] = tifFile
                     else:
                         self.info("Unexpected extra image found: %s" % tifFile)
+
+                newCorrectedImage = Image(location=correctedImages[0])
+                setattr(newCorrectedImage, "image1" , pyworkflow.object.String(correctedImages[1]))
+                setattr(newCorrectedImage, "image2", pyworkflow.object.String(correctedImages[2]))
                 output.append(newCorrectedImage)
             else:
                 self.info("%s is a file: This was not expected." % seriesFolder)
