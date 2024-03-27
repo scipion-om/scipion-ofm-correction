@@ -75,10 +75,11 @@ class ofmcorrCorrector(ProtStreamingBase):
                       default="7h",
                       help="File will be considered finished if it has not been modified for this time. %s" % HELP_DURATION_FORMAT)
 
-        form.addParam('refChannel', params.IntParam,
-                      default=0,
-                      label='Fixed/Target channel',
-                      help='Channel number in the images file to be use as the reference.')
+        # This will affect the name of the outputs and then needs a change
+        # form.addParam('refChannel', params.IntParam,
+        #               default=0,
+        #               label='Fixed/Target channel',
+        #               help='Channel number in the images file to be use as the reference.')
 
         form.addParam('waitingTime', params.StringParam,
                       default="1d",
@@ -222,7 +223,7 @@ class ofmcorrCorrector(ProtStreamingBase):
         args = '--ij2 --headless --default-gc'
         args += ' --run "%s"' % os.path.join(self.getPlugin().getPluginDir(),"scripts", "bUnwarpJ_code.groovy")
         args += ' "inputFile=\'%s\',beadsFile=\'%s\',outputDir=\'%s\',fixedCh=%s,headless=true"' % \
-                (file, beadsFile, outputFolder , self.refChannel.get())
+                (file, beadsFile, outputFolder, 0 ) # self.refChannel.get())
 
         try:
             self.runJob(self.getPlugin().getFijiLauncher(), args)
@@ -240,17 +241,15 @@ class ofmcorrCorrector(ProtStreamingBase):
             seriesFolder= os.path.join(outputFolder, outputFile)
             if os.path.isdir(seriesFolder):
 
-                correctedImages = [None, None, None]
-                for index, tifFile in enumerate(os.listdir(seriesFolder)):
-                    tifFile = os.path.join(seriesFolder, tifFile)
-                    if index < 3:
-                        correctedImages[index] = tifFile
-                    else:
-                        self.info("Unexpected extra image found: %s" % tifFile)
+                def getTifname(prefix):
+                    return os.path.join(seriesFolder, prefix + outputFile + ".tif")
+                newCorrectedImage = Image(location=getTifname("Aligned_"))
 
-                newCorrectedImage = Image(location=correctedImages[0])
-                setattr(newCorrectedImage, "image1" , pyworkflow.object.String(correctedImages[1]))
-                setattr(newCorrectedImage, "image2", pyworkflow.object.String(correctedImages[2]))
+                def addExtraAttribute(prefix):
+                    setattr(newCorrectedImage, prefix, pyworkflow.object.String(getTifname(prefix)))
+
+                addExtraAttribute("Fixed_Ch_0_")
+                addExtraAttribute("Moving_Ch_1_")
                 output.append(newCorrectedImage)
             else:
                 self.info("%s is a file: This was not expected." % seriesFolder)
