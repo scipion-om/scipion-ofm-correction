@@ -60,6 +60,7 @@ import java.awt.Point
 //def stopThreshold = 0.01.doubleValue();
 
 //Get image file to be analyzed
+IJ.run("Conversions...", " ");
 
 if (inputFile.getName().endsWith(".tif")) {
     //Declare each image to process within input directory
